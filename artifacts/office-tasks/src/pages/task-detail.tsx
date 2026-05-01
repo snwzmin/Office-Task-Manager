@@ -445,17 +445,31 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                               Uploaded by {att.uploaded_by_name} · {formatDateTime(att.created_at)}
                             </p>
                           </div>
-                          <a
-                            href={att.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download={att.file_name}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
                             data-testid={`btn-download-${att.id}`}
+                            onClick={async () => {
+                              const token = localStorage.getItem("auth_token");
+                              const res = await fetch(att.file_url, {
+                                headers: { Authorization: `Bearer ${token ?? ""}` },
+                              });
+                              if (!res.ok) {
+                                toast({ title: "Download failed", variant: "destructive" });
+                                return;
+                              }
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = att.file_name;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
                           >
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </a>
+                            <Download className="h-4 w-4" />
+                          </Button>
                         </div>
                       ))}
                     </div>

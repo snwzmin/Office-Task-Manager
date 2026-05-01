@@ -1,10 +1,11 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tasksTable } from "./tasks";
 
 export const taskCommentsTable = pgTable("task_comments", {
   id: text("id").primaryKey(),
-  task_id: text("task_id").notNull(),
+  task_id: text("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   user_email: text("user_email").notNull(),
   user_name: text("user_name").notNull(),
   comment_text: text("comment_text").notNull(),

@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tasksTable } from "./tasks";
 
 export const actionTypeEnum = pgEnum("action_type", [
   "created",
@@ -19,7 +20,7 @@ export const actionTypeEnum = pgEnum("action_type", [
 
 export const taskActivityLogsTable = pgTable("task_activity_logs", {
   id: text("id").primaryKey(),
-  task_id: text("task_id").notNull(),
+  task_id: text("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   user_email: text("user_email").notNull(),
   user_name: text("user_name").notNull(),
   action_type: actionTypeEnum("action_type").notNull(),

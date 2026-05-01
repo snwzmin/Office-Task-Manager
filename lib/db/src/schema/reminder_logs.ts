@@ -1,10 +1,11 @@
 import { pgTable, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tasksTable } from "./tasks";
 
 export const reminderLogsTable = pgTable("reminder_logs", {
   id: text("id").primaryKey(),
-  task_id: text("task_id").notNull(),
+  task_id: text("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   user_email: text("user_email").notNull(),
   reminder_type: text("reminder_type").notNull(),
   reminder_datetime: text("reminder_datetime").notNull(),

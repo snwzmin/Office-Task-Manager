@@ -1,10 +1,11 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tasksTable } from "./tasks";
 
 export const taskAttachmentsTable = pgTable("task_attachments", {
   id: text("id").primaryKey(),
-  task_id: text("task_id").notNull(),
+  task_id: text("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   file_name: text("file_name").notNull(),
   file_url: text("file_url").notNull(),
   file_type: text("file_type").notNull(),

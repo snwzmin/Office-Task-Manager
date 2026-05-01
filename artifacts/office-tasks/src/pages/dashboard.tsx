@@ -191,7 +191,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={statusChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `\${value}`} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={String} />
                     <RechartsTooltip 
                       cursor={{ fill: 'hsl(var(--muted))' }} 
                       contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
@@ -225,7 +225,7 @@ export default function Dashboard() {
                       dataKey="value"
                     >
                       {priorityChartData.map((entry, index) => (
-                        <Cell key={`cell-\${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                     <RechartsTooltip 

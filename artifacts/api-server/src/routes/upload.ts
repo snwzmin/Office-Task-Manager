@@ -96,5 +96,17 @@ router.post(
   }
 );
 
+router.get("/uploads/:filename", requireAuth, (req: Request, res: Response) => {
+  const filename = path.basename(req.params.filename as string);
+  const filePath = path.join(UPLOADS_DIR, filename);
+
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "NotFound", message: "File not found" });
+    return;
+  }
+
+  res.sendFile(filePath);
+});
+
 export default router;
 export { UPLOADS_DIR };

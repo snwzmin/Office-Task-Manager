@@ -7,6 +7,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { categoriesTable } from "./categories";
+import { usersTable } from "./users";
 
 export const taskPriorityEnum = pgEnum("task_priority", [
   "low",
@@ -38,12 +40,12 @@ export const tasksTable = pgTable("tasks", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
-  category_id: text("category_id"),
+  category_id: text("category_id").references(() => categoriesTable.id, { onDelete: "set null" }),
   reference_number: text("reference_number"),
   source_department: text("source_department"),
-  assigned_to: text("assigned_to"),
+  assigned_to: text("assigned_to").references(() => usersTable.email, { onDelete: "set null" }),
   assigned_to_name: text("assigned_to_name"),
-  created_by: text("created_by").notNull(),
+  created_by: text("created_by").notNull().references(() => usersTable.email, { onDelete: "restrict" }),
   created_by_name: text("created_by_name").notNull(),
   priority: taskPriorityEnum("priority").notNull().default("medium"),
   status: taskStatusEnum("status").notNull().default("not_started"),

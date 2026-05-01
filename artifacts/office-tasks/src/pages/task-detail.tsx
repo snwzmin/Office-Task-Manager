@@ -14,6 +14,9 @@ import {
   useCreateTaskAttachment,
   useArchiveTask,
   useDeleteTask,
+  useDuplicateTask,
+  useGetMe,
+  getGetMeQueryKey,
   TaskStatus,
   type TaskComment,
   type TaskAttachment,
@@ -33,6 +36,7 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  Copy,
   Download,
   FolderOpen,
   MessageSquare,
@@ -90,11 +94,15 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     query: { queryKey: getGetTaskActivityQueryKey(taskId) }
   });
 
+  const { data: currentUser } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
+  const isAdmin = currentUser?.role === "admin";
+
   const statusMutation = useChangeTaskStatus();
   const commentMutation = useCreateTaskComment();
   const attachmentMutation = useCreateTaskAttachment();
   const archiveMutation = useArchiveTask();
   const deleteMutation = useDeleteTask();
+  const duplicateMutation = useDuplicateTask();
 
   if (isTaskLoading) {
     return (
@@ -162,6 +170,19 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
           setLocation("/tasks");
         },
         onError: () => toast({ title: "Failed to delete task", variant: "destructive" })
+      }
+    );
+  };
+
+  const handleDuplicate = () => {
+    duplicateMutation.mutate(
+      { id: taskId },
+      {
+        onSuccess: (newTask) => {
+          toast({ title: "Task duplicated" });
+          setLocation(`/tasks/${newTask.id}`);
+        },
+        onError: () => toast({ title: "Failed to duplicate task", variant: "destructive" }),
       }
     );
   };
@@ -247,14 +268,26 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
               Edit
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDuplicate}
+            disabled={duplicateMutation.isPending}
+            data-testid="btn-duplicate-task"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Duplicate
+          </Button>
           <Button variant="outline" size="sm" onClick={handleArchive} data-testid="btn-archive-task">
             <Archive className="h-4 w-4 mr-2" />
             {task.is_archived ? "Restore" : "Archive"}
           </Button>
-          <Button variant="destructive" size="sm" onClick={handleDelete} data-testid="btn-delete-task">
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
-          </Button>
+          {isAdmin && (
+            <Button variant="destructive" size="sm" onClick={handleDelete} data-testid="btn-delete-task">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

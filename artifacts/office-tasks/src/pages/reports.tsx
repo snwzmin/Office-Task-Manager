@@ -7,8 +7,11 @@ import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/lib/taskUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileDown, Calendar as CalendarIcon, CheckSquare, AlertCircle, BarChart3 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, CartesianGrid
@@ -63,6 +66,74 @@ export default function Reports() {
     document.body.removeChild(link);
   };
 
+  const exportPDF = () => {
+    if (!summary) return;
+    const doc = new jsPDF();
+    const exportDate = new Date().toLocaleDateString();
+
+    doc.setFontSize(18);
+    doc.text("Task Reports & Analytics", 14, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text(`Exported ${exportDate}`, 14, 27);
+
+    doc.setTextColor(0);
+    doc.setFontSize(12);
+    doc.text("Overall Summary", 14, 38);
+    autoTable(doc, {
+      startY: 42,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Total Tasks", String(summary.total)],
+        ["Completed", String(summary.completed)],
+        ["Overdue", String(summary.overdue)],
+      ],
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    const afterOverall = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFontSize(12);
+    doc.text("By Status", 14, afterOverall);
+    autoTable(doc, {
+      startY: afterOverall + 4,
+      head: [["Status", "Count"]],
+      body: summary.by_status.map((item) => [
+        STATUS_CONFIG[item.status]?.label ?? item.status,
+        String(item.count),
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    const afterStatus = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFontSize(12);
+    doc.text("By Priority", 14, afterStatus);
+    autoTable(doc, {
+      startY: afterStatus + 4,
+      head: [["Priority", "Count"]],
+      body: summary.by_priority.map((item) => [
+        PRIORITY_CONFIG[item.priority]?.label ?? item.priority,
+        String(item.count),
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    const afterPriority = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFontSize(12);
+    doc.text("By User", 14, afterPriority);
+    autoTable(doc, {
+      startY: afterPriority + 4,
+      head: [["User", "Task Count"]],
+      body: summary.by_user.map((item) => [item.user_name, String(item.count)]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    doc.save("task_reports.pdf");
+  };
+
   const priorityColors = {
     low: "hsl(var(--muted-foreground))",
     medium: "hsl(var(--primary))",
@@ -77,10 +148,22 @@ export default function Reports() {
           <h2 className="text-2xl font-bold tracking-tight">Reports & Analytics</h2>
           <p className="text-muted-foreground">Detailed insights into task performance and distribution.</p>
         </div>
-        <Button onClick={exportCSV} disabled={!summary || isLoading} data-testid="btn-export-reports">
-          <FileDown className="mr-2 h-4 w-4" />
-          Export Report
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button disabled={!summary || isLoading} data-testid="btn-export-reports">
+              <FileDown className="mr-2 h-4 w-4" />
+              Export Report
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportCSV} className="cursor-pointer" data-testid="btn-export-reports-csv">
+              <FileDown className="mr-2 h-4 w-4" /> Export CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportPDF} className="cursor-pointer" data-testid="btn-export-reports-pdf">
+              <FileDown className="mr-2 h-4 w-4" /> Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Card>

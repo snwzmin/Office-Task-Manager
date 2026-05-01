@@ -100,6 +100,19 @@ export default function Tasks() {
     );
   };
 
+  const handleDuplicate = (id: string) => {
+    duplicateMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetTasksQueryKey() });
+          toast({ title: "Task duplicated" });
+        },
+        onError: () => toast({ title: "Failed to duplicate task", variant: "destructive" }),
+      }
+    );
+  };
+
   const exportCSV = () => {
     if (!tasks.length) return;
     const headers = ["Title", "Status", "Priority", "Assigned To", "Due Date"];
@@ -125,6 +138,31 @@ export default function Tasks() {
     document.body.removeChild(link);
   };
 
+  const exportPDF = () => {
+    if (!tasks.length) return;
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(16);
+    doc.text("Task List", 14, 16);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text(`Exported ${new Date().toLocaleDateString()}`, 14, 22);
+    autoTable(doc, {
+      startY: 26,
+      head: [["Title", "Status", "Priority", "Assigned To", "Due Date"]],
+      body: tasks.map((t) => [
+        t.title,
+        STATUS_CONFIG[t.status]?.label ?? t.status,
+        PRIORITY_CONFIG[t.priority]?.label ?? t.priority,
+        t.assigned_to_name ?? "Unassigned",
+        formatDate(t.due_date),
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+    });
+    doc.save("tasks.pdf");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -133,10 +171,22 @@ export default function Tasks() {
           <p className="text-muted-foreground">Manage and track all office tasks.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={exportCSV} disabled={!tasks.length} data-testid="btn-export">
-            <FileDown className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!tasks.length} data-testid="btn-export">
+                <FileDown className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportCSV} className="cursor-pointer" data-testid="btn-export-csv">
+                <FileDown className="mr-2 h-4 w-4" /> Export CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportPDF} className="cursor-pointer" data-testid="btn-export-pdf">
+                <FileDown className="mr-2 h-4 w-4" /> Export PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Link href="/tasks/new">
             <Button data-testid="btn-create-task">
               <Plus className="h-4 w-4 mr-2" />
@@ -282,6 +332,14 @@ export default function Tasks() {
                             <Edit className="mr-2 h-4 w-4" /> Edit Task
                           </DropdownMenuItem>
                         </Link>
+                        <DropdownMenuItem
+                          onClick={() => handleDuplicate(task.id)}
+                          className="cursor-pointer"
+                          disabled={duplicateMutation.isPending}
+                          data-testid={`btn-duplicate-${task.id}`}
+                        >
+                          <Copy className="mr-2 h-4 w-4" /> Duplicate
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleArchive(task.id, task.is_archived)} className="cursor-pointer">
                           {task.is_archived ? (
@@ -290,9 +348,15 @@ export default function Tasks() {
                             <><Archive className="mr-2 h-4 w-4" /> Archive</>
                           )}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(task.id)} className="cursor-pointer text-destructive focus:text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(task.id)}
+                            className="cursor-pointer text-destructive focus:text-destructive"
+                            data-testid={`btn-delete-${task.id}`}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

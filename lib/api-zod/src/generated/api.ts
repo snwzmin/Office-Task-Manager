@@ -579,6 +579,13 @@ export const ChangeTaskStatusResponse = zod.object({
 });
 
 /**
+ * @summary Duplicate a task (creates a copy in not_started status)
+ */
+export const DuplicateTaskParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
  * @summary Get comments for a task
  */
 export const GetTaskCommentsParams = zod.object({

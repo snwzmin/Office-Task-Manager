@@ -1334,6 +1334,90 @@ export const useChangeTaskStatus = <
 };
 
 /**
+ * @summary Duplicate a task (creates a copy in not_started status)
+ */
+export const getDuplicateTaskUrl = (id: string) => {
+  return `/api/tasks/${id}/duplicate`;
+};
+
+export const duplicateTask = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Task> => {
+  return customFetch<Task>(getDuplicateTaskUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDuplicateTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof duplicateTask>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof duplicateTask>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["duplicateTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof duplicateTask>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return duplicateTask(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DuplicateTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof duplicateTask>>
+>;
+
+export type DuplicateTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Duplicate a task (creates a copy in not_started status)
+ */
+export const useDuplicateTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof duplicateTask>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof duplicateTask>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDuplicateTaskMutationOptions(options));
+};
+
+/**
  * @summary Get comments for a task
  */
 export const getGetTaskCommentsUrl = (id: string) => {

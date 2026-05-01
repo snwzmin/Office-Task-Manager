@@ -1,0 +1,243 @@
+Build a full-featured Office Task Management System using React, Tailwind CSS, 
+and Base44 as the backend-as-a-service platform. The app should be production-ready, 
+responsive (mobile + desktop), and designed for team use in a professional office environment.
+
+---
+
+## ENTITIES (Database Schema)
+
+Create the following entities:
+
+1. **Task** — Core entity with fields:
+   - title (string, required)
+   - description (string)
+   - category_id (string — foreign key ref to Category)
+   - reference_number (string — file/letter reference)
+   - source_department (string)
+   - assigned_to (string — user email)
+   - assigned_to_name (string)
+   - priority: enum [low, medium, high, urgent], default: medium
+   - status: enum [not_started, in_progress, waiting_for_response, 
+                   deferred, completed, cancelled], default: not_started
+   - start_date (date)
+   - due_date (date, required)
+   - due_time (string HH:mm)
+   - reminder_option: enum [none, on_due, 15min_before, 1hr_before, 
+                             2hr_before, 1day_before, custom]
+   - custom_reminder_datetime (string ISO)
+   - tags (string — comma-separated)
+   - is_archived (boolean, default: false)
+   - completed_at (string — timestamp)
+   - reminder_sent (boolean, default: false)
+
+2. **Category** — name, description, color (hex), is_active (boolean)
+
+3. **TaskComment** — task_id, user_email, user_name, comment_text
+
+4. **TaskActivityLog** — task_id, user_email, user_name, 
+   action_type (enum: created, assigned, status_changed, priority_changed, 
+   due_date_changed, comment_added, attachment_uploaded, reminder_sent, 
+   completed, archived, restored, edited), action_details
+
+5. **TaskAttachment** — task_id, file_name, file_url, file_type, 
+   uploaded_by_email, uploaded_by_name
+
+6. **ReminderLog** — task_id, user_email, reminder_type, reminder_datetime, 
+   email_sent (boolean), sent_at, error_message
+
+---
+
+## PAGES & ROUTING
+
+Set up React Router with an AppLayout wrapper (sidebar + topbar + mobile nav):
+
+- / → Dashboard
+- /tasks → TaskList
+- /tasks/new → TaskForm (create)
+- /tasks/:id → TaskDetail
+- /tasks/:id/edit → TaskForm (edit)
+- /reports → Reports
+- /categories → Categories
+- /users → UserManagement (admin only)
+
+---
+
+## LAYOUT & NAVIGATION
+
+Build a persistent AppLayout with:
+- **Sidebar** (desktop, lg+): dark-themed, collapsible, with nav links, 
+  active state highlighting, user avatar + role display, logout button
+- **TopBar**: hamburger menu (mobile), page title, theme toggle (dark/light), 
+  notification bell, user avatar
+- **MobileNav**: fixed bottom navigation bar with icons for key pages
+- **Theme**: Support dark/light mode using CSS variables and next-themes
+
+Design tokens in index.css using HSL CSS variables for:
+background, foreground, card, primary, secondary, muted, accent, 
+destructive, border, input, ring, sidebar-* variants
+
+---
+
+## DASHBOARD PAGE
+
+Show a summary overview with:
+- 6 StatCards: Total Tasks, Pending, Due Today, Overdue, 
+  Completed This Week, High Priority
+- 2 Charts (Recharts): Pie chart (tasks by status), 
+  Bar chart (active tasks by priority)
+- 3 Task List widgets: Due Today, Overdue, Upcoming (7 days)
+- Role-based filtering: admins see all tasks, regular users see only 
+  their assigned/created tasks
+- Export button (CSV + PDF) in header
+
+---
+
+## TASK LIST PAGE
+
+Full filterable/searchable task table with:
+- Search bar (title, reference, department, tags, name)
+- Quick view tabs: All, My Tasks, Created by Me, Delegated
+- Filter dropdowns: Status, Priority, Assigned To, Category, Date Range
+- Archive toggle (show archived tasks)
+- TaskTable component with desktop table view + mobile card view
+- Priority badges (color-coded), Status badges, Due date display
+- Export button (CSV + PDF) for current filtered results
+- Empty state with CTA to create task
+
+---
+
+## TASK FORM PAGE (Create / Edit / Duplicate)
+
+Comprehensive form with:
+- Title, Description (textarea)
+- Category selector (from Category entity)
+- Reference Number, Source Department
+- Assigned To (user picker from User entity)
+- Priority selector (low/medium/high/urgent)
+- Status selector
+- Start Date + Due Date pickers (date-fns calendar)
+- Due Time input
+- Reminder options (none, 15min, 1hr, 2hr, 1day, custom datetime)
+- Tags input (comma-separated)
+- On create: log TaskActivityLog entry (action: created)
+- On edit: detect changed fields and log each change separately
+- Duplicate mode: pre-fill form from existing task, save as new
+
+---
+
+## TASK DETAIL PAGE
+
+Rich detail view with:
+- Full task metadata display (all fields)
+- Status change button → StatusChangeDialog (modal with all status options)
+- Edit, Duplicate, Archive/Restore, Delete (admin only) actions
+- Mark as Complete button
+- **TaskComments** section: view + post comments, log activity
+- **TaskAttachments** section: upload files (PDF, images, docs), 
+  display with file type icons, download links
+- **TaskActivityLog** section: chronological activity history with 
+  emoji icons per action type
+
+---
+
+## REPORTS PAGE
+
+Analytics and reporting with:
+- Date range filter (Last 7 days, 30 days, 3 months, This year, All time)
+- Stacked/grouped bar charts for: tasks by status, by priority, 
+  by assigned user, by department
+- Summary stat cards
+- Overdue analysis chart
+- Export current report view as CSV
+
+---
+
+## CATEGORIES PAGE
+
+CRUD management for task categories:
+- List view with color swatches, active/inactive toggle
+- Create/Edit dialog with name, description, color picker, active status
+
+---
+
+## USER MANAGEMENT PAGE (Admin only)
+
+- List all users with avatar, email, role badge, active status
+- Edit user: change role (admin/user), department, active status
+- Invite new user by email with role assignment
+- Role-based access: only admins can access this page
+
+---
+
+## SHARED COMPONENTS
+
+Build reusable components:
+- **StatCard**: icon + value + title + optional subtitle
+- **StatusBadge**: color-coded badge per status
+- **PriorityBadge**: color-coded badge per priority
+- **LoadingSpinner**: centered spinner with message
+- **EmptyState**: icon + title + message + optional CTA action
+- **ExportReportButton**: dropdown with CSV and PDF export options
+  - CSV: plain comma-separated with all task fields
+  - PDF: jsPDF landscape A4, styled table with header row, 
+    alternating row colors, title, generation timestamp, task count
+
+---
+
+## UTILITY LIBRARY (lib/taskUtils.js)
+
+Export:
+- STATUS_CONFIG: { label, color } per status key
+- PRIORITY_CONFIG: { label, color } per priority key
+- REMINDER_OPTIONS: array of { value, label }
+- formatDate(dateStr): readable date string
+- formatDateTime(dateStr): readable date + time
+- getDueStatus(task): returns { label, color, isOverdue }
+- isOverdue(task): boolean
+- isDueToday(task): boolean
+- isDueThisWeek(task): boolean
+- isDueThisMonth(task): boolean
+- canUserAccessTask(task, user): boolean — admin sees all, 
+  user sees assigned/created
+
+---
+
+## DESIGN SYSTEM
+
+- Font: Inter (Google Fonts)
+- Color scheme: Professional blue primary (#2563eb range), 
+  slate-based neutrals, dark sidebar
+- Fully responsive: mobile-first with lg: breakpoints
+- Dark mode support via .dark class + CSS variables
+- Smooth hover transitions, subtle shadows on cards
+- Use shadcn/ui components throughout (Button, Card, Dialog, 
+  Select, Badge, Table, Input, Textarea, Calendar, etc.)
+- Lucide React for all icons
+- Framer Motion for page/list animations where appropriate
+
+---
+
+## ROLE-BASED ACCESS CONTROL
+
+- **admin**: sees all tasks, can delete tasks, access UserManagement, 
+  manage categories, view all users' data in reports
+- **user**: sees only tasks assigned to them or created by them, 
+  cannot access UserManagement, cannot delete tasks
+
+Apply this filtering at the data-fetch level on every page.
+
+---
+
+## TECH STACK
+
+- React 18 + React Router v6
+- Tailwind CSS with custom design tokens
+- shadcn/ui component library
+- TanStack React Query v5 for data fetching + caching
+- Recharts for data visualization
+- date-fns for date manipulation
+- jsPDF for PDF generation
+- Base44 SDK (@/api/base44Client) for all backend operations
+- Lucide React for icons
+- Framer Motion for animations
+- next-themes for dark/light mode

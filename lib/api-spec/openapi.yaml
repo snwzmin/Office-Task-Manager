@@ -1,15 +1,33 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Office Task Management System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: tasks
+    description: Task management
+  - name: categories
+    description: Category management
+  - name: users
+    description: User management
+  - name: comments
+    description: Task comments
+  - name: attachments
+    description: Task attachments
+  - name: activity
+    description: Task activity logs
+  - name: dashboard
+    description: Dashboard aggregates
+  - name: reports
+    description: Reports and analytics
+
 paths:
   /healthz:
     get:
@@ -24,7 +42,665 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/tasks-by-status:
+    get:
+      operationId: getTasksByStatus
+      tags: [dashboard]
+      summary: Get task counts grouped by status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tasks by status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StatusCount"
+
+  /dashboard/tasks-by-priority:
+    get:
+      operationId: getTasksByPriority
+      tags: [dashboard]
+      summary: Get task counts grouped by priority
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tasks by priority
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriorityCount"
+
+  /dashboard/due-today:
+    get:
+      operationId: getDueTodayTasks
+      tags: [dashboard]
+      summary: Get tasks due today
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tasks due today
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /dashboard/overdue:
+    get:
+      operationId: getOverdueTasks
+      tags: [dashboard]
+      summary: Get overdue tasks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Overdue tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /dashboard/upcoming:
+    get:
+      operationId: getUpcomingTasks
+      tags: [dashboard]
+      summary: Get tasks due in next 7 days
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Upcoming tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /tasks:
+    get:
+      operationId: getTasks
+      tags: [tasks]
+      summary: List tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/TaskStatus"
+        - name: priority
+          in: query
+          schema:
+            $ref: "#/components/schemas/TaskPriority"
+        - name: category_id
+          in: query
+          schema:
+            type: string
+        - name: assigned_to
+          in: query
+          schema:
+            type: string
+        - name: created_by
+          in: query
+          schema:
+            type: string
+        - name: is_archived
+          in: query
+          schema:
+            type: boolean
+        - name: date_from
+          in: query
+          schema:
+            type: string
+        - name: date_to
+          in: query
+          schema:
+            type: string
+        - name: view
+          in: query
+          schema:
+            type: string
+            enum: [all, my_tasks, created_by_me, delegated]
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a task by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskRequest"
+      responses:
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Task deleted
+
+  /tasks/{id}/archive:
+    post:
+      operationId: archiveTask
+      tags: [tasks]
+      summary: Archive or restore a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_archived:
+                  type: boolean
+              required:
+                - is_archived
+      responses:
+        "200":
+          description: Task archive status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/status:
+    post:
+      operationId: changeTaskStatus
+      tags: [tasks]
+      summary: Change task status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: "#/components/schemas/TaskStatus"
+              required:
+                - status
+      responses:
+        "200":
+          description: Task status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/comments:
+    get:
+      operationId: getTaskComments
+      tags: [comments]
+      summary: Get comments for a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskComment"
+
+    post:
+      operationId: createTaskComment
+      tags: [comments]
+      summary: Add a comment to a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment_text:
+                  type: string
+              required:
+                - comment_text
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskComment"
+
+  /tasks/{id}/attachments:
+    get:
+      operationId: getTaskAttachments
+      tags: [attachments]
+      summary: Get attachments for a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskAttachment"
+
+    post:
+      operationId: createTaskAttachment
+      tags: [attachments]
+      summary: Add an attachment record to a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAttachmentRequest"
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskAttachment"
+
+  /tasks/{id}/activity:
+    get:
+      operationId: getTaskActivity
+      tags: [activity]
+      summary: Get activity log for a task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activity log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskActivityLog"
+
+  /categories:
+    get:
+      operationId: getCategories
+      tags: [categories]
+      summary: List categories
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    put:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update a category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete a category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Category deleted
+
+  /users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: List all users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfile"
+
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create/invite a user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/{id}:
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /reports/summary:
+    get:
+      operationId: getReportsSummary
+      tags: [reports]
+      summary: Get aggregated report data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+        - name: date_to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report summary data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportsSummary"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +710,540 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required:
+        - token
+        - user
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        department:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - email
+        - name
+        - role
+        - is_active
+        - created_at
+        - updated_at
+
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        department:
+          type: string
+      required:
+        - email
+        - name
+        - password
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        department:
+          type: string
+        is_active:
+          type: boolean
+        avatar_url:
+          type: string
+
+    TaskStatus:
+      type: string
+      enum:
+        - not_started
+        - in_progress
+        - waiting_for_response
+        - deferred
+        - completed
+        - cancelled
+
+    TaskPriority:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+        - urgent
+
+    ReminderOption:
+      type: string
+      enum:
+        - none
+        - on_due
+        - 15min_before
+        - 1hr_before
+        - 2hr_before
+        - 1day_before
+        - custom
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category_id:
+          type: string
+          nullable: true
+        reference_number:
+          type: string
+          nullable: true
+        source_department:
+          type: string
+          nullable: true
+        assigned_to:
+          type: string
+          nullable: true
+        assigned_to_name:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+        created_by_name:
+          type: string
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        start_date:
+          type: string
+          nullable: true
+        due_date:
+          type: string
+        due_time:
+          type: string
+          nullable: true
+        reminder_option:
+          $ref: "#/components/schemas/ReminderOption"
+        custom_reminder_datetime:
+          type: string
+          nullable: true
+        tags:
+          type: string
+          nullable: true
+        is_archived:
+          type: boolean
+        completed_at:
+          type: string
+          nullable: true
+        reminder_sent:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - title
+        - created_by
+        - created_by_name
+        - priority
+        - status
+        - due_date
+        - reminder_option
+        - is_archived
+        - reminder_sent
+        - created_at
+        - updated_at
+
+    CreateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category_id:
+          type: string
+        reference_number:
+          type: string
+        source_department:
+          type: string
+        assigned_to:
+          type: string
+        assigned_to_name:
+          type: string
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        start_date:
+          type: string
+        due_date:
+          type: string
+        due_time:
+          type: string
+        reminder_option:
+          $ref: "#/components/schemas/ReminderOption"
+        custom_reminder_datetime:
+          type: string
+        tags:
+          type: string
+      required:
+        - title
+        - due_date
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        category_id:
+          type: string
+        reference_number:
+          type: string
+        source_department:
+          type: string
+        assigned_to:
+          type: string
+        assigned_to_name:
+          type: string
+        priority:
+          $ref: "#/components/schemas/TaskPriority"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        start_date:
+          type: string
+        due_date:
+          type: string
+        due_time:
+          type: string
+        reminder_option:
+          $ref: "#/components/schemas/ReminderOption"
+        custom_reminder_datetime:
+          type: string
+        tags:
+          type: string
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        color:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - name
+        - color
+        - is_active
+        - created_at
+        - updated_at
+
+    CreateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        is_active:
+          type: boolean
+      required:
+        - name
+
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        is_active:
+          type: boolean
+
+    TaskComment:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        user_email:
+          type: string
+        user_name:
+          type: string
+        comment_text:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - task_id
+        - user_email
+        - user_name
+        - comment_text
+        - created_at
+        - updated_at
+
+    TaskAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        file_name:
+          type: string
+        file_url:
+          type: string
+        file_type:
+          type: string
+        file_size:
+          type: string
+          nullable: true
+        uploaded_by_email:
+          type: string
+        uploaded_by_name:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - task_id
+        - file_name
+        - file_url
+        - file_type
+        - uploaded_by_email
+        - uploaded_by_name
+        - created_at
+
+    CreateAttachmentRequest:
+      type: object
+      properties:
+        file_name:
+          type: string
+        file_url:
+          type: string
+        file_type:
+          type: string
+        file_size:
+          type: string
+      required:
+        - file_name
+        - file_url
+        - file_type
+
+    TaskActivityLog:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        user_email:
+          type: string
+        user_name:
+          type: string
+        action_type:
+          type: string
+          enum:
+            - created
+            - assigned
+            - status_changed
+            - priority_changed
+            - due_date_changed
+            - comment_added
+            - attachment_uploaded
+            - reminder_sent
+            - completed
+            - archived
+            - restored
+            - edited
+        action_details:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+        - id
+        - task_id
+        - user_email
+        - user_name
+        - action_type
+        - created_at
+
+    DashboardSummary:
+      type: object
+      properties:
+        total_tasks:
+          type: integer
+        pending_tasks:
+          type: integer
+        due_today:
+          type: integer
+        overdue:
+          type: integer
+        completed_this_week:
+          type: integer
+        high_priority:
+          type: integer
+      required:
+        - total_tasks
+        - pending_tasks
+        - due_today
+        - overdue
+        - completed_this_week
+        - high_priority
+
+    StatusCount:
+      type: object
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+      required:
+        - status
+        - count
+
+    PriorityCount:
+      type: object
+      properties:
+        priority:
+          type: string
+        count:
+          type: integer
+      required:
+        - priority
+        - count
+
+    ReportsSummary:
+      type: object
+      properties:
+        by_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatusCount"
+        by_priority:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriorityCount"
+        by_user:
+          type: array
+          items:
+            type: object
+            properties:
+              user_name:
+                type: string
+              count:
+                type: integer
+            required:
+              - user_name
+              - count
+        by_department:
+          type: array
+          items:
+            type: object
+            properties:
+              department:
+                type: string
+              count:
+                type: integer
+            required:
+              - department
+              - count
+        overdue_by_priority:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriorityCount"
+        total:
+          type: integer
+        completed:
+          type: integer
+        overdue:
+          type: integer
+      required:
+        - by_status
+        - by_priority
+        - by_user
+        - by_department
+        - overdue_by_priority
+        - total
+        - completed
+        - overdue

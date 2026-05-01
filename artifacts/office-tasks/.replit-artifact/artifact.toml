@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Office Task Management"
+version = "1.0.0"
+id = "artifacts/office-tasks"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25936
+
+[services.development]
+run = "pnpm --filter @workspace/office-tasks run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/office-tasks", "run", "build" ]
+publicDir = "artifacts/office-tasks/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25936"
+BASE_PATH = "/"

@@ -313,4 +313,53 @@ router.post("/tasks/:id/status", requireAuth, async (req: Request, res: Response
   res.json(formatTask(updated));
 });
 
+router.post("/tasks/:id/duplicate", requireAuth, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const authUser = getAuthUser(req);
+
+  const [original] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
+  if (!original) {
+    res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, original)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
+    return;
+  }
+
+  const newId = generateId();
+  const now = new Date();
+
+  await db.insert(tasksTable).values({
+    id: newId,
+    title: `Copy of ${original.title}`,
+    description: original.description,
+    category_id: original.category_id,
+    reference_number: null,
+    source_department: original.source_department,
+    assigned_to: original.assigned_to,
+    assigned_to_name: original.assigned_to_name,
+    created_by: authUser.email,
+    created_by_name: authUser.name,
+    priority: original.priority,
+    status: "not_started",
+    start_date: original.start_date,
+    due_date: original.due_date,
+    due_time: original.due_time,
+    reminder_option: original.reminder_option,
+    custom_reminder_datetime: original.custom_reminder_datetime,
+    tags: original.tags,
+    is_archived: false,
+    completed_at: null,
+    reminder_sent: false,
+    created_at: now,
+    updated_at: now,
+  });
+
+  await logActivity(newId, authUser.email, authUser.name, "created", `Duplicated from task ${id}`);
+
+  const [created] = await db.select().from(tasksTable).where(eq(tasksTable.id, newId)).limit(1);
+  res.status(201).json(formatTask(created));
+});
+
 export default router;

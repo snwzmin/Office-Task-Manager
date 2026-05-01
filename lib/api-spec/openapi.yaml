@@ -395,6 +395,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
 
+  /tasks/{id}/duplicate:
+    post:
+      operationId: duplicateTask
+      tags: [tasks]
+      summary: Duplicate a task (creates a copy in not_started status)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Duplicated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
   /tasks/{id}/comments:
     get:
       operationId: getTaskComments

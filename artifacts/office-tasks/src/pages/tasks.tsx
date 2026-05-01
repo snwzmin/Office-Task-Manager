@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   useGetTasks,
@@ -7,6 +7,9 @@ import {
   getGetCategoriesQueryKey,
   useDeleteTask,
   useArchiveTask,
+  useDuplicateTask,
+  useGetMe,
+  getGetMeQueryKey,
   TaskStatus,
   TaskPriority,
   type Task,
@@ -28,9 +31,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, Plus, MoreHorizontal, FileDown, Eye, Edit, Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Search, Plus, MoreHorizontal, FileDown, Eye, Edit, Trash2, Archive, ArchiveRestore, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function Tasks() {
   const [search, setSearch] = useState("");
@@ -42,6 +47,9 @@ export default function Tasks() {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: currentUser } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
+  const isAdmin = currentUser?.role === "admin";
 
   const { data: categories } = useGetCategories(undefined, { query: { queryKey: getGetCategoriesQueryKey() } });
 
@@ -58,11 +66,11 @@ export default function Tasks() {
 
   const archiveMutation = useArchiveTask();
   const deleteMutation = useDeleteTask();
+  const duplicateMutation = useDuplicateTask();
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
-    // Simple debounce could go here, but for now we'll just update directly for simplicity in a mockup
-    setDebouncedSearch(e.target.value); 
+    setDebouncedSearch(e.target.value);
   };
 
   const handleArchive = (id: string, currentlyArchived: boolean) => {

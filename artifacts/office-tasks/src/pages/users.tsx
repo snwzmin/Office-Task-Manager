@@ -7,6 +7,8 @@ import {
   getGetMeQueryKey,
   useCreateUser,
   useUpdateUser,
+  type UserProfile,
+  type UpdateUserRequest,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -47,8 +49,8 @@ export default function UserManagement() {
   const updateMutation = useUpdateUser();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
-  
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -58,7 +60,7 @@ export default function UserManagement() {
     is_active: true
   });
 
-  const handleOpenDialog = (user?: any) => {
+  const handleOpenDialog = (user?: UserProfile) => {
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -90,11 +92,11 @@ export default function UserManagement() {
     }
 
     if (editingUser) {
-      const payload: any = {
+      const payload: UpdateUserRequest = {
         name: formData.name,
         role: formData.role,
         department: formData.department,
-        is_active: formData.is_active
+        is_active: formData.is_active,
       };
       
       updateMutation.mutate(
@@ -177,7 +179,7 @@ export default function UserManagement() {
                 </TableCell>
               </TableRow>
             ) : (
-              users?.map((user: any) => (
+              users?.map((user) => (
                 <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
                   <TableCell>
                     <div className="flex items-center gap-3">

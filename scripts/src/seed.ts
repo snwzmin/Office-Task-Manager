@@ -18,6 +18,7 @@ async function seed() {
   const adminId = randomUUID();
   const userId1 = randomUUID();
   const userId2 = randomUUID();
+  const userId3 = randomUUID();
 
   await db
     .insert(usersTable)
@@ -33,6 +34,15 @@ async function seed() {
       },
       {
         id: userId1,
+        email: "user@office.com",
+        name: "Regular User",
+        password_hash: userHash,
+        role: "user",
+        department: "Operations",
+        is_active: true,
+      },
+      {
+        id: userId2,
         email: "alice@office.com",
         name: "Alice Johnson",
         password_hash: userHash,
@@ -41,7 +51,7 @@ async function seed() {
         is_active: true,
       },
       {
-        id: userId2,
+        id: userId3,
         email: "bob@office.com",
         name: "Bob Smith",
         password_hash: userHash,
@@ -361,8 +371,9 @@ async function seed() {
   console.log("\n✅ Database seeded successfully!");
   console.log("Login credentials:");
   console.log("  Admin:  admin@office.com / admin123");
-  console.log("  User 1: alice@office.com / user123");
-  console.log("  User 2: bob@office.com   / user123");
+  console.log("  User:   user@office.com  / user123");
+  console.log("  User:   alice@office.com / user123");
+  console.log("  User:   bob@office.com   / user123");
 }
 
 seed().catch(console.error).finally(() => process.exit(0));

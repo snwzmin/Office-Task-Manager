@@ -1,7 +1,19 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.JWT_SECRET || "office-task-mgmt-secret-change-in-prod";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET environment variable is required in production. Set it before starting the server.");
+  }
+  console.warn(
+    "[auth] WARNING: JWT_SECRET is not set. Using an insecure default for development only. " +
+    "Set JWT_SECRET before deploying to production."
+  );
+}
+
+const EFFECTIVE_SECRET = JWT_SECRET ?? "office-task-mgmt-dev-only-secret";
 
 export interface AuthUser {
   id: string;
@@ -11,12 +23,12 @@ export interface AuthUser {
 }
 
 export function signToken(user: AuthUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(user, EFFECTIVE_SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): AuthUser | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthUser;
+    return jwt.verify(token, EFFECTIVE_SECRET) as AuthUser;
   } catch {
     return null;
   }
@@ -49,4 +61,16 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
 
 export function getAuthUser(req: Request): AuthUser {
   return (req as Request & { user: AuthUser }).user;
+}
+
+/** Returns true when the given user may read/write the task (admin or task creator/assignee). */
+export function canAccessTask(
+  authUser: AuthUser,
+  task: { created_by: string; assigned_to: string | null }
+): boolean {
+  return (
+    authUser.role === "admin" ||
+    task.created_by === authUser.email ||
+    task.assigned_to === authUser.email
+  );
 }

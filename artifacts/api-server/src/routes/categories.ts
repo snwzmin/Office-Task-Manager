@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { categoriesTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth, getAuthUser } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
@@ -24,7 +24,7 @@ router.get("/categories", requireAuth, async (req: Request, res: Response) => {
   res.json(rows.map(formatCategory));
 });
 
-router.post("/categories", requireAuth, async (req: Request, res: Response) => {
+router.post("/categories", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const body = req.body as {
     name: string;
     description?: string;
@@ -50,8 +50,8 @@ router.post("/categories", requireAuth, async (req: Request, res: Response) => {
   res.status(201).json(formatCategory(cat));
 });
 
-router.put("/categories/:id", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+router.put("/categories/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
   const body = req.body as Partial<typeof categoriesTable.$inferInsert>;
 
   const [existing] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, id)).limit(1);
@@ -69,8 +69,8 @@ router.put("/categories/:id", requireAuth, async (req: Request, res: Response) =
   res.json(formatCategory(updated));
 });
 
-router.delete("/categories/:id", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+router.delete("/categories/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
   await db.delete(categoriesTable).where(eq(categoriesTable.id, id));
   res.status(204).send();
 });

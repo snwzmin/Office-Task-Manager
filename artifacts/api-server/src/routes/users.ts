@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth, requireAdmin, getAuthUser } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
@@ -22,9 +22,23 @@ function formatUser(u: typeof usersTable.$inferSelect) {
   };
 }
 
-router.get("/users", requireAuth, async (_req: Request, res: Response) => {
+router.get("/users", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
   const rows = await db.select().from(usersTable).orderBy(asc(usersTable.name));
   res.json(rows.map(formatUser));
+});
+
+router.get("/users/active", requireAuth, async (_req: Request, res: Response) => {
+  const rows = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      department: usersTable.department,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.is_active, true))
+    .orderBy(asc(usersTable.name));
+  res.json(rows);
 });
 
 router.post("/users", requireAuth, requireAdmin, async (req: Request, res: Response) => {
@@ -58,7 +72,7 @@ router.post("/users", requireAuth, requireAdmin, async (req: Request, res: Respo
 });
 
 router.put("/users/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const body = req.body as {
     name?: string;
     role?: string;

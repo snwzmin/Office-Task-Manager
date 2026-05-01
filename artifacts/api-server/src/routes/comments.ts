@@ -1,14 +1,26 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { taskCommentsTable, taskActivityLogsTable } from "@workspace/db/schema";
+import { taskCommentsTable, taskActivityLogsTable, tasksTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth, getAuthUser } from "../lib/auth";
+import { requireAuth, getAuthUser, canAccessTask } from "../lib/auth";
 import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
 
 router.get("/tasks/:id/comments", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
+  const authUser = getAuthUser(req);
+
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, task)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
+    return;
+  }
+
   const rows = await db
     .select()
     .from(taskCommentsTable)
@@ -24,9 +36,19 @@ router.get("/tasks/:id/comments", requireAuth, async (req: Request, res: Respons
 });
 
 router.post("/tasks/:id/comments", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const { comment_text } = req.body as { comment_text: string };
+
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, task)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
+    return;
+  }
 
   if (!comment_text?.trim()) {
     res.status(400).json({ error: "BadRequest", message: "comment_text is required" });

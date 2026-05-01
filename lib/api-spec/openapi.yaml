@@ -643,6 +643,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserProfile"
 
+  /users/active:
+    get:
+      operationId: getActiveUsers
+      tags: [users]
+      summary: List active users (minimal) for task assignment — available to all authenticated users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of active users with minimal info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserDirectory"
+
   /users/{id}:
     put:
       operationId: updateUser
@@ -741,6 +758,24 @@ components:
       required:
         - token
         - user
+
+    UserDirectory:
+      type: object
+      description: Minimal user info for task assignment dropdowns
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        department:
+          type: string
+          nullable: true
+      required:
+        - id
+        - email
+        - name
 
     UserProfile:
       type: object

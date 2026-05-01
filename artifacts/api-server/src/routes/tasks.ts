@@ -5,7 +5,7 @@ import {
   taskActivityLogsTable,
 } from "@workspace/db/schema";
 import { eq, and, or, ilike, lte, gte, desc } from "drizzle-orm";
-import { requireAuth, getAuthUser } from "../lib/auth";
+import { requireAuth, getAuthUser, canAccessTask } from "../lib/auth";
 import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
@@ -156,7 +156,7 @@ router.post("/tasks", requireAuth, async (req: Request, res: Response) => {
 });
 
 router.get("/tasks/:id", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   if (!task) {
@@ -175,11 +175,15 @@ router.get("/tasks/:id", requireAuth, async (req: Request, res: Response) => {
 });
 
 router.put("/tasks/:id", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, existing)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
     return;
   }
 
@@ -228,7 +232,7 @@ router.delete("/tasks/:id", requireAuth, async (req: Request, res: Response) => 
     res.status(403).json({ error: "Forbidden", message: "Admin access required" });
     return;
   }
-  const { id } = req.params;
+  const id = req.params.id as string;
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ error: "NotFound", message: "Task not found" });
@@ -239,13 +243,17 @@ router.delete("/tasks/:id", requireAuth, async (req: Request, res: Response) => 
 });
 
 router.post("/tasks/:id/archive", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const body = req.body as { is_archived: boolean };
 
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, existing)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
     return;
   }
 
@@ -267,13 +275,17 @@ router.post("/tasks/:id/archive", requireAuth, async (req: Request, res: Respons
 });
 
 router.post("/tasks/:id/status", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const { status } = req.body as { status: string };
 
   const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, existing)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
     return;
   }
 

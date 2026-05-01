@@ -41,5 +41,6 @@ export * from "./updateCategoryRequest";
 export * from "./updateTaskRequest";
 export * from "./updateUserRequest";
 export * from "./updateUserRequestRole";
+export * from "./userDirectory";
 export * from "./userProfile";
 export * from "./userProfileRole";

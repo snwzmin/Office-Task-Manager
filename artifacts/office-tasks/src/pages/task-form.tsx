@@ -11,8 +11,8 @@ import {
   useUpdateTask,
   useGetCategories,
   getGetCategoriesQueryKey,
-  useGetUsers,
-  getGetUsersQueryKey,
+  useGetActiveUsers,
+  getGetActiveUsersQueryKey,
   useGetMe,
   getGetMeQueryKey,
   TaskStatus,
@@ -48,7 +48,7 @@ export default function TaskForm({ taskId }: { taskId?: string }) {
 
   const { data: currentUser } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
   const { data: categories } = useGetCategories(undefined, { query: { queryKey: getGetCategoriesQueryKey() } });
-  const { data: users } = useGetUsers({ query: { queryKey: getGetUsersQueryKey() } });
+  const { data: users } = useGetActiveUsers({ query: { queryKey: getGetActiveUsersQueryKey() } });
 
   const { data: task, isLoading: isTaskLoading } = useGetTask(taskId as string, {
     query: { 

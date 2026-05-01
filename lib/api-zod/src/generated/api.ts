@@ -761,6 +761,19 @@ export const CreateUserBody = zod.object({
 });
 
 /**
+ * @summary List active users (minimal) for task assignment — available to all authenticated users
+ */
+export const GetActiveUsersResponseItem = zod
+  .object({
+    id: zod.string(),
+    email: zod.string(),
+    name: zod.string(),
+    department: zod.string().nullish(),
+  })
+  .describe("Minimal user info for task assignment dropdowns");
+export const GetActiveUsersResponse = zod.array(GetActiveUsersResponseItem);
+
+/**
  * @summary Update a user
  */
 export const UpdateUserParams = zod.object({

@@ -44,6 +44,16 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
+/**
+ * Minimal user info for task assignment dropdowns
+ */
+export interface UserDirectory {
+  id: string;
+  email: string;
+  name: string;
+  department?: string | null;
+}
+
 export type CreateUserRequestRole =
   (typeof CreateUserRequestRole)[keyof typeof CreateUserRequestRole];
 

@@ -1,14 +1,26 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { taskAttachmentsTable, taskActivityLogsTable } from "@workspace/db/schema";
+import { taskAttachmentsTable, taskActivityLogsTable, tasksTable } from "@workspace/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth, getAuthUser } from "../lib/auth";
+import { requireAuth, getAuthUser, canAccessTask } from "../lib/auth";
 import { generateId } from "../lib/id";
 
 const router: IRouter = Router();
 
 router.get("/tasks/:id/attachments", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
+  const authUser = getAuthUser(req);
+
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, task)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
+    return;
+  }
+
   const rows = await db
     .select()
     .from(taskAttachmentsTable)
@@ -23,7 +35,7 @@ router.get("/tasks/:id/attachments", requireAuth, async (req: Request, res: Resp
 });
 
 router.post("/tasks/:id/attachments", requireAuth, async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const authUser = getAuthUser(req);
   const body = req.body as {
     file_name: string;
@@ -31,6 +43,16 @@ router.post("/tasks/:id/attachments", requireAuth, async (req: Request, res: Res
     file_type: string;
     file_size?: string;
   };
+
+  const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
+  if (!task) {
+    res.status(404).json({ error: "NotFound", message: "Task not found" });
+    return;
+  }
+  if (!canAccessTask(authUser, task)) {
+    res.status(403).json({ error: "Forbidden", message: "Access denied" });
+    return;
+  }
 
   if (!body.file_name || !body.file_url || !body.file_type) {
     res.status(400).json({ error: "BadRequest", message: "file_name, file_url, file_type required" });

@@ -43,6 +43,7 @@ import type {
   UpdateCategoryRequest,
   UpdateTaskRequest,
   UpdateUserRequest,
+  UserDirectory,
   UserProfile,
 } from "./api.schemas";
 
@@ -2271,6 +2272,81 @@ export const useCreateUser = <
 > => {
   return useMutation(getCreateUserMutationOptions(options));
 };
+
+/**
+ * @summary List active users (minimal) for task assignment — available to all authenticated users
+ */
+export const getGetActiveUsersUrl = () => {
+  return `/api/users/active`;
+};
+
+export const getActiveUsers = async (
+  options?: RequestInit,
+): Promise<UserDirectory[]> => {
+  return customFetch<UserDirectory[]>(getGetActiveUsersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetActiveUsersQueryKey = () => {
+  return [`/api/users/active`] as const;
+};
+
+export const getGetActiveUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getActiveUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getActiveUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetActiveUsersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getActiveUsers>>> = ({
+    signal,
+  }) => getActiveUsers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getActiveUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetActiveUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getActiveUsers>>
+>;
+export type GetActiveUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List active users (minimal) for task assignment — available to all authenticated users
+ */
+
+export function useGetActiveUsers<
+  TData = Awaited<ReturnType<typeof getActiveUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getActiveUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetActiveUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Update a user

@@ -43,9 +43,18 @@ This is a full-featured **Office Task Management System** with:
 
 ### Seed Data (dev only)
 - admin@office.com / admin123 (role: admin)
+- user@office.com / user123 (role: user) — canonical test user
 - alice@office.com / user123 (role: user)
 - bob@office.com / user123 (role: user)
 - 5 categories, 15 tasks
+
+### Authorization Model
+- `GET /api/users` — admin only (user management)
+- `GET /api/users/active` — any authenticated user (minimal: id, name, email, department — used for task assignee dropdowns)
+- `POST/PUT/DELETE /api/categories` — admin only
+- `PUT/archive/status /api/tasks/:id` — admin OR task creator/assignee (IDOR protection)
+- `GET/POST /api/tasks/:id/comments|attachments|activity` — admin OR task creator/assignee
+- JWT_SECRET: required env var in production (server refuses to start without it)
 
 ## Key Commands
 

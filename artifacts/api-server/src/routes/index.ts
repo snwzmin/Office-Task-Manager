@@ -9,6 +9,7 @@ import categoriesRouter from "./categories";
 import usersRouter from "./users";
 import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
+import uploadRouter from "./upload";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(categoriesRouter);
 router.use(usersRouter);
 router.use(dashboardRouter);
 router.use(reportsRouter);
+router.use(uploadRouter);
 
 export default router;

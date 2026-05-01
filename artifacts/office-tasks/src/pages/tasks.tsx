@@ -8,7 +8,8 @@ import {
   useDeleteTask,
   useArchiveTask,
   TaskStatus,
-  TaskPriority
+  TaskPriority,
+  type Task,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { STATUS_CONFIG, PRIORITY_CONFIG, formatDate, isOverdue } from "@/lib/taskUtils";
@@ -53,7 +54,7 @@ export default function Tasks() {
   };
 
   const { data: tasksData, isLoading } = useGetTasks(queryParams, { query: { queryKey: getGetTasksQueryKey(queryParams) } });
-  const tasks = Array.isArray(tasksData) ? tasksData : (tasksData as any)?.tasks || [];
+  const tasks: Task[] = tasksData ?? [];
 
   const archiveMutation = useArchiveTask();
   const deleteMutation = useDeleteTask();
@@ -96,7 +97,7 @@ export default function Tasks() {
     const headers = ["Title", "Status", "Priority", "Assigned To", "Due Date"];
     const csvContent = [
       headers.join(","),
-      ...tasks.map((t: any) => [
+      ...tasks.map((t) => [
         `"${t.title.replace(/"/g, '""')}"`,
         t.status,
         t.priority,
@@ -230,7 +231,7 @@ export default function Tasks() {
                 </TableCell>
               </TableRow>
             ) : (
-              tasks.map((task: any) => (
+              tasks.map((task) => (
                 <TableRow key={task.id}>
                   <TableCell className="font-medium">
                     <Link href={`/tasks/${task.id}`} className="hover:underline">

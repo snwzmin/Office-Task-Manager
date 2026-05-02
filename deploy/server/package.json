@@ -1,0 +1,11 @@
+{
+  "name": "office-tasks-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --enable-source-maps --env-file=.env ./dist/index.mjs"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  }
+}

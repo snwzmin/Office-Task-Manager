@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "lduOwglUEhugLVyN1oC1-"
+uri = "file://office-tasks-production.zip"
+type = "unspecified"
+title = "office-tasks-production.zip — Ready to Deploy"

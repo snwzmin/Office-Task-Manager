@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# User-uploaded files — never version these
+artifacts/api-server/uploads/

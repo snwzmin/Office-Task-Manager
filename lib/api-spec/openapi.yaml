@@ -217,8 +217,10 @@ paths:
             type: string
         - name: is_archived
           in: query
+          description: Filter by archive status. Defaults to false (returns non-archived tasks) when omitted.
           schema:
             type: boolean
+            default: false
         - name: date_from
           in: query
           schema:

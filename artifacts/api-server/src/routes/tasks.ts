@@ -187,7 +187,21 @@ router.put("/tasks/:id", requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const body = req.body as Partial<typeof tasksTable.$inferInsert>;
+  const raw = req.body as Record<string, unknown>;
+
+  const ALLOWED_UPDATE_FIELDS = [
+    "title", "description", "category_id", "reference_number",
+    "source_department", "assigned_to", "assigned_to_name",
+    "priority", "status", "start_date", "due_date", "due_time",
+    "reminder_option", "custom_reminder_datetime", "tags",
+  ] as const;
+
+  type AllowedField = typeof ALLOWED_UPDATE_FIELDS[number];
+  const body: Partial<Pick<typeof tasksTable.$inferInsert, AllowedField>> = {};
+  for (const key of ALLOWED_UPDATE_FIELDS) {
+    if (key in raw) (body as Record<string, unknown>)[key] = raw[key];
+  }
+
   const changes: string[] = [];
 
   if (body.status && body.status !== existing.status) {

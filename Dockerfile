@@ -23,12 +23,12 @@ RUN mkdir -p artifacts/api-server/public && \
 RUN pnpm --filter @workspace/api-server run build
 
 RUN artifacts/api-server/node_modules/.bin/esbuild seed.mjs \
-      --bundle --platform=node --format=esm \
-      --outfile=seed.bundle.mjs --external:*.node
+      --bundle --platform=node --format=cjs \
+      --outfile=seed.bundle.cjs --external:*.node
 
 RUN artifacts/api-server/node_modules/.bin/esbuild migrate.mjs \
-      --bundle --platform=node --format=esm \
-      --outfile=migrate.bundle.mjs --external:*.node
+      --bundle --platform=node --format=cjs \
+      --outfile=migrate.bundle.cjs --external:*.node
 
 FROM node:20-alpine AS runner
 
@@ -42,8 +42,8 @@ WORKDIR /app
 
 COPY --from=builder /build/artifacts/api-server/dist ./dist
 COPY --from=builder /build/artifacts/api-server/public ./public
-COPY --from=builder /build/seed.bundle.mjs ./seed.mjs
-COPY --from=builder /build/migrate.bundle.mjs ./migrate.mjs
+COPY --from=builder /build/seed.bundle.cjs ./seed.cjs
+COPY --from=builder /build/migrate.bundle.cjs ./migrate.cjs
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh && mkdir -p /app/uploads

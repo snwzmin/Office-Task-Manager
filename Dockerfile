@@ -22,11 +22,11 @@ RUN mkdir -p artifacts/api-server/public && \
 
 RUN pnpm --filter @workspace/api-server run build
 
-RUN node_modules/.bin/esbuild seed.mjs \
+RUN artifacts/api-server/node_modules/.bin/esbuild seed.mjs \
       --bundle --platform=node --format=esm \
       --outfile=seed.bundle.mjs --external:*.node
 
-RUN node_modules/.bin/esbuild migrate.mjs \
+RUN artifacts/api-server/node_modules/.bin/esbuild migrate.mjs \
       --bundle --platform=node --format=esm \
       --outfile=migrate.bundle.mjs --external:*.node
 
@@ -35,7 +35,7 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache bash
 
 ENV NODE_ENV=production
-ENV PORT=8080
+ENV PORT=3000
 ENV UPLOAD_DIR=/app/uploads
 
 WORKDIR /app
@@ -48,6 +48,6 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh && mkdir -p /app/uploads
 
-EXPOSE 8080
+EXPOSE 3000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -7,6 +7,7 @@ export const taskAttachmentsTable = pgTable("task_attachments", {
   id: text("id").primaryKey(),
   task_id: text("task_id").notNull().references(() => tasksTable.id, { onDelete: "cascade" }),
   file_name: text("file_name").notNull(),
+  stored_filename: text("stored_filename"),
   file_url: text("file_url").notNull(),
   file_type: text("file_type").notNull(),
   file_size: text("file_size"),

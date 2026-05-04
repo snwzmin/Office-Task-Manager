@@ -452,20 +452,33 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                             data-testid={`btn-download-${att.id}`}
                             onClick={async () => {
                               const token = localStorage.getItem("auth_token");
-                              const res = await fetch(att.file_url, {
-                                headers: { Authorization: `Bearer ${token ?? ""}` },
-                              });
+                              const res = await fetch(
+                                `/api/tasks/${taskId}/attachments/${att.id}/download`,
+                                { headers: { Authorization: `Bearer ${token ?? ""}` } }
+                              );
                               if (!res.ok) {
                                 toast({ title: "Download failed", variant: "destructive" });
                                 return;
                               }
-                              const blob = await res.blob();
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = att.file_name;
-                              a.click();
-                              URL.revokeObjectURL(url);
+                              const contentType = res.headers.get("Content-Type") ?? "";
+                              if (contentType.includes("application/json")) {
+                                // S3/R2 mode: backend returns a presigned URL
+                                const { download_url } = await res.json() as { download_url: string };
+                                const a = document.createElement("a");
+                                a.href = download_url;
+                                a.target = "_blank";
+                                a.rel = "noopener noreferrer";
+                                a.click();
+                              } else {
+                                // Local disk mode: stream the file as a blob
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = att.file_name;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              }
                             }}
                           >
                             <Download className="h-4 w-4" />

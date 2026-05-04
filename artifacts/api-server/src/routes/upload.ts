@@ -3,12 +3,20 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { requireAuth, getAuthUser } from "../lib/auth";
+import { isS3, uploadToS3 } from "../lib/storage";
 
-const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
+// ── Local storage dir (only used when STORAGE_PROVIDER !== "s3") ──────────────
 
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+export const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ??
+  process.env.UPLOADS_DIR ??
+  path.resolve(process.cwd(), "uploads");
+
+if (!isS3() && !fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
+
+// ── Shared allow-lists ────────────────────────────────────────────────────────
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -29,32 +37,49 @@ const ALLOWED_EXTENSIONS = new Set([
   ".jpg", ".jpeg", ".png", ".gif", ".webp",
 ]);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ts = Date.now();
-    const rand = Math.random().toString(36).slice(2, 8);
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${ts}-${rand}${ext}`);
-  },
-});
+function fileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_MIME_TYPES.has(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error("File type not allowed. Accepted: PDF, Word, Excel, PowerPoint, JPEG, PNG"));
+  }
+}
 
-const uploadMiddleware = multer({
-  storage,
+// S3 mode — buffer in memory, push to R2 after multer finishes
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_MIME_TYPES.has(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error("File type not allowed. Accepted: PDF, Word, Excel, PowerPoint, JPEG, PNG"));
-    }
-  },
+  fileFilter,
 });
 
-const router: IRouter = Router();
+// Local mode — write straight to disk
+const diskUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter,
+});
 
-function handleUploadError(err: unknown, _req: Request, res: Response, next: NextFunction): void {
+const uploadMiddleware = isS3() ? memoryUpload : diskUpload;
+
+// ── Error handler ─────────────────────────────────────────────────────────────
+
+function handleUploadError(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): void {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       res.status(400).json({ error: "FileTooLarge", message: "File size must be under 20 MB" });
@@ -70,43 +95,52 @@ function handleUploadError(err: unknown, _req: Request, res: Response, next: Nex
   next(err);
 }
 
+// ── Router ────────────────────────────────────────────────────────────────────
+
+const router: IRouter = Router();
+
 router.post(
   "/upload",
   requireAuth,
   uploadMiddleware.single("file"),
   handleUploadError,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     getAuthUser(req);
-
     const file = (req as Request & { file?: Express.Multer.File }).file;
     if (!file) {
       res.status(400).json({ error: "BadRequest", message: "No file provided" });
       return;
     }
 
-    const file_url = `/api/uploads/${file.filename}`;
-    const file_size = `${(file.size / 1024).toFixed(1)} KB`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const generatedName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
 
-    res.status(201).json({
-      file_name: file.originalname,
-      file_url,
-      file_type: file.mimetype,
-      file_size,
-    });
+    if (isS3()) {
+      const objectKey = `uploads/${generatedName}`;
+      try {
+        await uploadToS3(objectKey, file.buffer, file.mimetype);
+      } catch (err) {
+        console.error("[upload] R2 upload failed:", err);
+        res.status(502).json({ error: "StorageError", message: "Failed to upload file to storage" });
+        return;
+      }
+      res.status(201).json({
+        file_name: file.originalname,
+        stored_filename: objectKey,
+        file_url: `s3://${process.env.S3_BUCKET ?? "task-files-prod"}/${objectKey}`,
+        file_type: file.mimetype,
+        file_size: `${(file.size / 1024).toFixed(1)} KB`,
+      });
+    } else {
+      res.status(201).json({
+        file_name: file.originalname,
+        stored_filename: file.filename,
+        file_url: `/api/uploads/${file.filename}`,
+        file_type: file.mimetype,
+        file_size: `${(file.size / 1024).toFixed(1)} KB`,
+      });
+    }
   }
 );
 
-router.get("/uploads/:filename", requireAuth, (req: Request, res: Response) => {
-  const filename = path.basename(req.params.filename as string);
-  const filePath = path.join(UPLOADS_DIR, filename);
-
-  if (!fs.existsSync(filePath)) {
-    res.status(404).json({ error: "NotFound", message: "File not found" });
-    return;
-  }
-
-  res.sendFile(filePath);
-});
-
 export default router;
-export { UPLOADS_DIR };

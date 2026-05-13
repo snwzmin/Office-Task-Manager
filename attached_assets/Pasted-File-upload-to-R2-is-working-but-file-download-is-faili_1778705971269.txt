@@ -1,0 +1,83 @@
+File upload to R2 is working, but file download is failing.
+
+Production logs show:
+
+`[download] R2 stream failed: NoSuchKey: The specified key does not exist.`
+
+Database table is `task_attachments`.
+
+Example latest record:
+
+`stored_filename = 1778705184605-1otoxr.pdf`
+
+`file_url = s3://task-files-prod/uploads/1778705184605-1otoxr.pdf`
+
+The download code appears to be using the wrong R2 key.
+
+Please fix the download route so it derives the correct R2 object key from the attachment record.
+
+Rules:
+
+1. For R2 `GetObjectCommand`, use only the object key, for example:
+
+`uploads/1778705184605-1otoxr.pdf`
+
+2. Do not pass the full S3 URI as the key:
+
+Wrong:
+`s3://task-files-prod/uploads/1778705184605-1otoxr.pdf`
+
+3. Do not pass only `stored_filename` unless the object is actually stored at bucket root.
+
+Wrong if object is under uploads:
+`1778705184605-1otoxr.pdf`
+
+4. Add a helper such as:
+
+`getR2ObjectKey(attachment)`
+
+It should:
+
+* if `file_url` starts with `s3://task-files-prod/`, strip that prefix and return the remaining key;
+* if `file_url` starts with `s3://`, strip `s3://bucket-name/` and return the remaining key;
+* if `file_url` starts with `uploads/` or `objects/`, use it directly;
+* if only `stored_filename` exists, use `uploads/${stored_filename}` for current Task Management records;
+* if `file_url` starts with `/api/uploads/`, treat it as an old local-storage legacy file and return a clear 404 or migration-required message, not an R2 `NoSuchKey`.
+
+5. Update download route:
+
+`GET /api/tasks/:taskId/attachments/:attachmentId/download`
+
+to use this normalized object key before calling `GetObjectCommand`.
+
+6. Update delete route to use the same normalized key before deleting from R2.
+
+7. Add logging for failed downloads that prints:
+
+* attachment id
+* task id
+* stored_filename
+* file_url
+* normalized object key
+* R2 bucket name
+
+Do not log credentials.
+
+8. Test with this exact existing record:
+
+`id = 4213a353-6198-4450-ad33-680bfb9fbcb3`
+`file_url = s3://task-files-prod/uploads/1778705184605-1otoxr.pdf`
+
+The backend should request this R2 key:
+
+`uploads/1778705184605-1otoxr.pdf`
+
+not the full `s3://...` URI and not just the filename.
+
+9. Confirm after fix:
+
+* authenticated user can download;
+* copied download URL in incognito returns 401/403;
+* unauthorized user cannot download another user’s task attachment;
+* R2 upload still works;
+* old local `/api/uploads/...` records do not crash the app.

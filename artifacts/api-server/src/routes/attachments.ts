@@ -10,8 +10,47 @@ import {
 import { eq, asc, and } from "drizzle-orm";
 import { requireAuth, getAuthUser, canAccessTask } from "../lib/auth";
 import { generateId } from "../lib/id";
-import { isS3, streamFromS3, deleteFromS3 } from "../lib/storage";
+import { isS3, streamFromS3, deleteFromS3, S3_BUCKET } from "../lib/storage";
 import { UPLOAD_DIR } from "./upload";
+
+/**
+ * Derives the R2/S3 object key from an attachment record.
+ *
+ * Priority order:
+ *  1. file_url starts with "s3://" → strip "s3://bucket-name/" prefix
+ *  2. file_url starts with "uploads/" or "objects/" → use as-is
+ *  3. file_url starts with "/api/uploads/" → legacy local file, return null (caller sends 410)
+ *  4. stored_filename present → "uploads/<stored_filename>"
+ *  5. fallback → basename of file_url (best-effort)
+ */
+function getR2ObjectKey(attachment: {
+  stored_filename: string | null;
+  file_url: string;
+}): { key: string; legacy: false } | { key: null; legacy: true } {
+  const { file_url, stored_filename } = attachment;
+
+  if (file_url.startsWith("s3://")) {
+    // Strip s3://bucket-name/ regardless of bucket name
+    const withoutScheme = file_url.slice("s3://".length);
+    const slashIdx = withoutScheme.indexOf("/");
+    const key = slashIdx !== -1 ? withoutScheme.slice(slashIdx + 1) : withoutScheme;
+    return { key, legacy: false };
+  }
+
+  if (file_url.startsWith("uploads/") || file_url.startsWith("objects/")) {
+    return { key: file_url, legacy: false };
+  }
+
+  if (file_url.startsWith("/api/uploads/")) {
+    return { key: null, legacy: true };
+  }
+
+  if (stored_filename) {
+    return { key: `uploads/${stored_filename}`, legacy: false };
+  }
+
+  return { key: path.basename(file_url), legacy: false };
+}
 
 const router: IRouter = Router();
 
@@ -175,11 +214,22 @@ router.get(
       return;
     }
 
-    const objectKey =
-      attachment.stored_filename ?? path.basename(attachment.file_url);
-
     // ── S3 / R2 — server-side stream ─────────────────────────────────────────
     if (isS3()) {
+      const r2Key = getR2ObjectKey(attachment);
+
+      // In S3 mode, a /api/uploads/ URL means the file was stored locally
+      // before R2 was configured — it no longer exists in the bucket.
+      if (r2Key.legacy) {
+        res.status(410).json({
+          error: "Gone",
+          message:
+            "This attachment was stored locally and is no longer available. Re-upload the file.",
+        });
+        return;
+      }
+
+      const objectKey = r2Key.key;
       try {
         const { stream, contentType, contentLength } =
           await streamFromS3(objectKey);
@@ -194,7 +244,18 @@ router.get(
 
         stream.pipe(res);
       } catch (err: unknown) {
-        console.error("[download] R2 stream failed:", err);
+        console.error(
+          "[download] R2 stream failed:",
+          {
+            attachmentId: attachment.id,
+            taskId,
+            stored_filename: attachment.stored_filename,
+            file_url: attachment.file_url,
+            objectKey,
+            bucket: S3_BUCKET,
+          },
+          err
+        );
         const isNoSuchKey =
           err instanceof Error && err.name === "NoSuchKey";
         if (isNoSuchKey) {
@@ -211,7 +272,12 @@ router.get(
     }
 
     // ── Local disk ────────────────────────────────────────────────────────────
-    const filePath = path.join(UPLOAD_DIR, path.basename(objectKey));
+    // In local mode, stored_filename is the bare filename on disk.
+    // file_url may be "/api/uploads/<name>" (current) or a legacy path — fall
+    // back to path.basename so both formats resolve to the disk filename.
+    const localFilename =
+      attachment.stored_filename ?? path.basename(attachment.file_url);
+    const filePath = path.join(UPLOAD_DIR, path.basename(localFilename));
     if (!fs.existsSync(filePath)) {
       res
         .status(404)
@@ -277,16 +343,18 @@ router.delete(
 
     // Any user who can access the task may delete its attachments
 
-    const objectKey =
-      attachment.stored_filename ?? path.basename(attachment.file_url);
+    const r2DeleteKey = getR2ObjectKey(attachment);
+    const objectKey = r2DeleteKey.legacy ? null : r2DeleteKey.key;
 
     // Delete DB record first — storage cleanup is best-effort
     await db
       .delete(taskAttachmentsTable)
       .where(eq(taskAttachmentsTable.id, attachmentId));
 
-    // Attempt storage cleanup
-    if (isS3()) {
+    // Attempt storage cleanup (skip for legacy local-storage records)
+    if (objectKey === null) {
+      console.log(`[delete] Legacy local file record removed from DB (no R2 object to clean up): ${attachmentId}`);
+    } else if (isS3()) {
       try {
         await deleteFromS3(objectKey);
         console.log(`[delete] R2 object removed: ${objectKey}`);

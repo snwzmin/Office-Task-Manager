@@ -64,7 +64,7 @@ export function Layout({ children }: LayoutProps) {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r bg-card/50 backdrop-blur-sm">
         <div className="p-6 border-b">
-          <h1 className="text-xl font-bold text-primary tracking-tight">TaskCommand</h1>
+          <h1 className="text-xl font-bold text-primary tracking-tight">Task Management System</h1>
         </div>
         <nav className="flex-1 p-4 space-y-1">
           {navItems.map((item) => {
@@ -99,14 +99,12 @@ export function Layout({ children }: LayoutProps) {
           </Button>
         </div>
       </aside>
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 h-[100dvh] overflow-y-auto">
         <div className="flex-1 p-4 md:p-8">
           {children}
         </div>
       </main>
-
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card flex justify-around p-2 pb-safe z-50">
         {navItems.slice(0, 4).map((item) => {

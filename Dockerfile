@@ -1,8 +1,10 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
+
+LABEL cache-bust="2026-05-13-1"
 
 RUN apt-get update && apt-get install -y --no-install-recommends git bash && \
     rm -rf /var/lib/apt/lists/*
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 
 WORKDIR /build
 
@@ -30,7 +32,7 @@ RUN artifacts/api-server/node_modules/.bin/esbuild migrate.mjs \
       --bundle --platform=node --format=cjs \
       --outfile=migrate.bundle.cjs --external:*.node
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 RUN apk add --no-cache bash
 

@@ -514,7 +514,7 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
-                          {(isAdmin || currentUser?.email === att.uploaded_by_email) && (
+                          {currentUser && (
                             <Button
                               variant="ghost"
                               size="icon"

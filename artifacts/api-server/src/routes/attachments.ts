@@ -275,17 +275,7 @@ router.delete(
       return;
     }
 
-    // Only admin or the original uploader can delete
-    if (
-      authUser.role !== "admin" &&
-      authUser.email !== attachment.uploaded_by_email
-    ) {
-      res.status(403).json({
-        error: "Forbidden",
-        message: "Only an admin or the uploader can delete this attachment",
-      });
-      return;
-    }
+    // Any user who can access the task may delete its attachments
 
     const objectKey =
       attachment.stored_filename ?? path.basename(attachment.file_url);

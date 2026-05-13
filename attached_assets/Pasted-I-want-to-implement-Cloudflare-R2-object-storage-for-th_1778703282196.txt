@@ -1,0 +1,269 @@
+I want to implement Cloudflare R2 object storage for the Task Management System, using the same secure pattern that was successfully implemented in MIS Support Desk.
+
+Please first inspect the existing Task Management codebase, routes, database schema, attachment logic, frontend attachment UI, Dockerfile, package.json, and current storage implementation before making changes.
+
+Main objective:
+Move all task attachment/file storage from VPS/local container storage to Cloudflare R2, while keeping downloads private and accessible only to authenticated/authorized users.
+
+Required R2 settings/environment variables:
+
+`STORAGE_PROVIDER=s3`
+`S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+`S3_REGION=auto`
+`S3_BUCKET=task-files-prod`
+`S3_FORCE_PATH_STYLE=true`
+`S3_ACCESS_KEY_ID=<from Dokploy env>`
+`S3_SECRET_ACCESS_KEY=<from Dokploy env>`
+
+Please implement the following:
+
+1. R2/S3 storage layer
+
+Create or update a reusable storage module similar to MIS Support Desk, for example:
+
+`lib/s3Storage.ts`
+
+It should:
+
+* use AWS SDK v3;
+* create an S3Client for Cloudflare R2;
+* use `endpoint`, `region=auto`, `forcePathStyle=true`;
+* generate short-lived presigned PUT URLs for browser uploads;
+* fetch objects server-side for secure downloads;
+* delete objects from R2 when an attachment is deleted;
+* fail gracefully with clear logs if R2 cleanup fails.
+
+2. Upload flow
+
+Use browser direct upload to R2 using short-lived presigned PUT URLs.
+
+Add or update an authenticated endpoint such as:
+
+`POST /api/storage/uploads/request-url`
+
+This endpoint should:
+
+* require login;
+* validate file name, file size, MIME type, and extension;
+* generate a unique R2 object key, preferably like:
+  `objects/<uuid>`
+* return the presigned PUT URL and object key;
+* never expose R2 secret keys to the frontend.
+
+Allowed file types should be configurable, but at minimum support:
+
+* PDF
+* JPG/JPEG
+* PNG
+* DOC/DOCX
+* XLS/XLSX
+* TXT
+
+Add reasonable file-size limits. Do not trust client-provided MIME type alone.
+
+3. Attachment metadata
+
+When upload succeeds, save only metadata in PostgreSQL, not a public file URL.
+
+The database should store:
+
+* task ID
+* original file name
+* R2 object key
+* MIME type/content type
+* file size
+* uploaded by user ID/email/name
+* created timestamp
+
+Do not store public R2 URLs or long-lived presigned URLs in the database.
+
+4. Secure download flow
+
+Do not expose direct R2 URLs or presigned GET URLs to users.
+
+Use an authenticated backend route, for example:
+
+`GET /api/attachments/:id/download`
+
+or, if the existing route pattern is different, use the existing route style but keep the same security model.
+
+This route must:
+
+* verify the user is logged in;
+* verify the user is authorized to access the related task/attachment;
+* fetch the object from R2 server-side using `GetObjectCommand`;
+* stream the file back to the browser;
+* set correct `Content-Type`;
+* set safe `Content-Disposition`;
+* add `Cache-Control: no-store`;
+* return `401` if not logged in;
+* return `403` if logged in but not allowed;
+* return `404` if attachment/object does not exist.
+
+Opening the copied download URL in Incognito/private browser without login must return:
+
+`{"message":"Not authenticated"}`
+
+or another proper 401/403 response. It must not open the file.
+
+5. Authorization rules
+
+Please enforce authorization on the backend, not only in the frontend.
+
+Use the existing Task Management roles and ownership model. If exact roles differ, inspect the code and apply the closest logic.
+
+At minimum:
+
+* Admin can access all task attachments.
+* Task creator can access attachments on tasks they created.
+* Assigned user can access attachments on tasks assigned to them.
+* Other users must be blocked unless existing business logic allows them.
+
+Do not rely on hidden buttons or frontend checks for security.
+
+6. Delete behavior
+
+When a task attachment is deleted:
+
+* delete the attachment database record;
+* attempt to delete the corresponding R2 object;
+* log R2 deletion failure but do not corrupt the database state.
+
+When a task is deleted or archived permanently, handle attachments safely:
+
+* delete or mark attachments according to the app’s existing business logic;
+* if permanent delete is used, remove R2 objects best-effort;
+* log failed R2 cleanups clearly.
+
+7. Avoid old insecure routes
+
+If there is any old route like:
+
+`/api/storage/objects/:key`
+
+make sure it is either:
+
+* removed,
+* disabled,
+* or protected by authentication and authorization.
+
+It must not become a public file-serving route.
+
+Also ensure all API routes are registered before the React/Vite SPA fallback route, so API paths do not show a frontend “404 Page Not Found.”
+
+8. Frontend changes
+
+Update the Task Management attachment UI to:
+
+* request a presigned upload URL;
+* upload the file to R2;
+* save attachment metadata against the task;
+* download/view files through the secure backend route only;
+* show clear upload progress/error messages;
+* refresh the attachment list after upload/delete.
+
+Do not use direct R2 URLs in the frontend.
+
+9. R2 CORS documentation
+
+Update deployment documentation with the required Cloudflare R2 CORS policy.
+
+For the Task Management bucket `task-files-prod`, include the exact production origin, for example:
+
+`https://<task-subdomain>.<domain>.com`
+
+No trailing slash.
+
+Allowed methods should include:
+
+`GET`, `PUT`, `HEAD`
+
+Allowed headers:
+
+`*`
+
+Expose headers:
+
+`ETag`
+
+Also mention that if the domain changes later, the new exact origin must be added to the R2 CORS policy.
+
+10. Docker and deployment stability
+
+Please preserve the Docker stability fixes already learned from MIS Support Desk:
+
+* use a Node version compatible with the project;
+* pin pnpm using `packageManager` in `package.json`;
+* avoid Corepack accidentally pulling an incompatible pnpm version;
+* make Docker build reproducible;
+* avoid stale build/cache issues;
+* add a Docker LABEL/cache-bust only if needed;
+* do not reset or overwrite the existing database;
+* seeding must be idempotent and must not overwrite existing users/tasks.
+
+11. Security hardening
+
+Please include:
+
+* server-side authorization checks;
+* file type/extension validation;
+* file size validation;
+* safe object key generation using UUID;
+* no public bucket access assumption;
+* no public R2 URLs in database;
+* no long-lived presigned GET URLs;
+* `Cache-Control: no-store` on sensitive downloads;
+* clear error handling and logs.
+
+12. Verification tests
+
+After implementation, please test and confirm:
+
+A. R2 code is included in the compiled backend:
+`S3Client`
+`PutObjectCommand`
+`GetObjectCommand`
+`getSignedUrl`
+`S3_BUCKET`
+
+B. Upload test:
+
+* upload a new file from the Task Management app;
+* confirm `POST /api/storage/uploads/request-url` returns 200;
+* confirm metadata is saved;
+* confirm object appears in `task-files-prod` R2 bucket.
+
+C. Download test:
+
+* logged-in authorized user can open/download the file;
+* copied download URL in Incognito/private browser returns 401/403 and does not open the file.
+
+D. Authorization test:
+
+* unauthorized user cannot access another user’s task attachment by manually entering the URL.
+
+E. Delete test:
+
+* delete an attachment;
+* database record is removed;
+* R2 object is removed or R2 deletion failure is logged clearly.
+
+F. Regression test:
+
+* task creation still works;
+* task editing still works;
+* assignment/reminders still work;
+* existing attachments, if any, do not break unexpectedly.
+
+13. Deployment notes
+
+Update `DEPLOY.md` with:
+
+* required Dokploy environment variables;
+* R2 bucket name: `task-files-prod`;
+* R2 CORS policy;
+* how to verify with AWS CLI;
+* how to test authenticated download;
+* warning to keep R2 public access disabled.
+
+Please implement this carefully and summarize the changed files, routes, env vars, and test results. Do not reset the database and do not remove existing tasks/users.

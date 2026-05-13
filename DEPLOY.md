@@ -1,304 +1,171 @@
-# Office Task Management System — Deployment Guide
-## Hostinger VPS (Node.js + PostgreSQL + nginx)
+# Office Task Management — Deployment Guide (Docker / Dokploy)
+
+This document covers deploying with Docker on a VPS managed by Dokploy.
 
 ---
 
-## What's Inside This Package
+## Quick start
 
-```
-office-tasks-production/
-├── server/
-│   ├── dist/           ← compiled Node.js backend (self-contained, no npm install needed)
-│   ├── public/         ← built React frontend (served by Node)
-│   └── uploads/        ← file upload storage (created automatically on first run)
-├── database/
-│   └── schema.sql      ← PostgreSQL schema (run once to create all tables)
-├── nginx/
-│   └── office-tasks.conf  ← nginx reverse proxy config
-├── ecosystem.config.cjs   ← PM2 process manager config
-├── .env.example           ← environment variable template
-└── DEPLOY.md              ← this file
-```
+Push the repository to GitHub. In Dokploy, point to the repo root — it will build
+using the `Dockerfile` at the root and start with `docker-entrypoint.sh`.
+
+The entrypoint runs automatically on every container start:
+1. `node /app/migrate.cjs` — idempotent schema migration (safe to re-run)
+2. `node /app/seed.cjs` — seeds default users only if the `users` table is empty
+3. `node /app/dist/index.mjs` — starts the Express server on `PORT` (default 3000)
 
 ---
 
-## Prerequisites
+## Required environment variables (Dokploy → Environment)
 
-Log into your VPS via SSH and install the following (if not already installed):
-
-### 1. Node.js 20+
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node --version   # should show v20.x or higher
-```
-
-### 2. PostgreSQL
-```bash
-sudo apt-get install -y postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
-
-### 3. nginx
-```bash
-sudo apt-get install -y nginx
-sudo systemctl start nginx
-sudo systemctl enable nginx
-```
-
-### 4. PM2 (process manager)
-```bash
-sudo npm install -g pm2
-```
+| Variable | Example / Notes |
+|---|---|
+| `NODE_ENV` | `production` |
+| `PORT` | `3000` |
+| `DATABASE_URL` | `postgres://user:pass@host:5432/dbname` |
+| `JWT_SECRET` | Random 64-char string — **required in production** |
+| `STORAGE_PROVIDER` | `s3` |
+| `S3_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
+| `S3_REGION` | `auto` |
+| `S3_BUCKET` | `task-files-prod` |
+| `S3_ACCESS_KEY_ID` | R2 API token Access Key ID |
+| `S3_SECRET_ACCESS_KEY` | R2 API token Secret Access Key |
+| `S3_FORCE_PATH_STYLE` | `true` |
 
 ---
 
-## Step 1 — Upload Files to Your VPS
+## Cloudflare R2 setup
 
-On your local machine, upload the package to your VPS using SCP or an SFTP client (e.g. FileZilla):
+### 1. Create bucket
 
-```bash
-# Using SCP (replace user and your-vps-ip)
-scp -r office-tasks-production/ user@your-vps-ip:/tmp/
+Bucket name: **`task-files-prod`**
+
+Cloudflare dashboard → R2 → Create bucket.
+**Keep public access disabled.**
+
+### 2. Create API token
+
+R2 → Manage R2 API Tokens → Create API Token.
+
+- Permissions: **Object Read & Write**
+- Scope: `task-files-prod` bucket only
+- Copy **Access Key ID** and **Secret Access Key** into Dokploy env vars.
+
+### 3. R2 CORS policy
+
+The browser uploads files **directly to R2** using a short-lived presigned PUT URL.
+R2 must allow PUT requests from your production domain.
+
+Cloudflare dashboard → R2 → `task-files-prod` → Settings → CORS Policy:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://tasks.yourdomain.com"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
 ```
 
-Then on the VPS, move it to the web directory:
-```bash
-sudo mkdir -p /var/www/office-tasks
-sudo cp -r /tmp/office-tasks-production/server    /var/www/office-tasks/
-sudo cp    /tmp/office-tasks-production/ecosystem.config.cjs /var/www/office-tasks/
-sudo mkdir -p /var/www/office-tasks/server/uploads
-sudo mkdir -p /var/log/pm2
-```
+> Replace the origin with your exact production URL — **no trailing slash**.
+> If your domain changes later, add the new origin to this list.
+> Without it, browser uploads fail with a CORS error even though the presigned URL is valid.
 
----
-
-## Step 2 — Set Up the PostgreSQL Database
+### 4. Verify connectivity (AWS CLI)
 
 ```bash
-# Switch to the postgres user
-sudo -i -u postgres
-
-# Create a database user (choose a strong password)
-psql -c "CREATE USER office_user WITH PASSWORD 'your_strong_password';"
-
-# Create the database
-psql -c "CREATE DATABASE office_tasks OWNER office_user;"
-
-# Grant privileges
-psql -c "GRANT ALL PRIVILEGES ON DATABASE office_tasks TO office_user;"
-
-# Exit postgres user
-exit
-```
-
-### Load the database schema
-```bash
-psql -U office_user -d office_tasks -h localhost -f /tmp/office-tasks-production/database/schema.sql
-```
-
-You will be prompted for the password you set above.
-
----
-
-## Step 3 — Configure Environment Variables
-
-```bash
-# Copy the example file
-cp /tmp/office-tasks-production/.env.example /var/www/office-tasks/server/.env
-
-# Edit it with your actual values
-nano /var/www/office-tasks/server/.env
-```
-
-Fill in these values:
-
-```env
-NODE_ENV=production
-PORT=3000
-DATABASE_URL=postgresql://office_user:your_strong_password@localhost:5432/office_tasks
-JWT_SECRET=paste_a_long_random_string_here
-```
-
-**Generate a secure JWT secret:**
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-```
-Copy the output and paste it as your `JWT_SECRET`.
-
----
-
-## Step 4 — Start the Application with PM2
-
-```bash
-cd /var/www/office-tasks
-
-# Start the app
-pm2 start ecosystem.config.cjs
-
-# Check it's running
-pm2 status
-
-# View live logs
-pm2 logs office-tasks
-
-# Make PM2 restart on server reboot
-pm2 startup
-# (run the command it prints out)
-pm2 save
-```
-
-At this point the app is running on **port 3000**. Test it:
-```bash
-curl http://localhost:3000/api/health
-# Should return: {"status":"ok"}
+AWS_ACCESS_KEY_ID=<key> AWS_SECRET_ACCESS_KEY=<secret> \
+  aws s3 ls s3://task-files-prod/ \
+  --endpoint-url https://<ACCOUNT_ID>.r2.cloudflarestorage.com \
+  --region auto
 ```
 
 ---
 
-## Step 5 — Configure nginx
+## Upload flow (browser → R2, credentials never exposed)
 
-```bash
-# Copy the nginx config
-sudo cp /tmp/office-tasks-production/nginx/office-tasks.conf \
-        /etc/nginx/sites-available/office-tasks.conf
-
-# Edit it to set your domain name
-sudo nano /etc/nginx/sites-available/office-tasks.conf
-# Change: server_name yourdomain.com www.yourdomain.com;
-# To:     server_name tasks.yourcompany.com www.tasks.yourcompany.com;
-
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/office-tasks.conf \
-           /etc/nginx/sites-enabled/office-tasks.conf
-
-# Remove the default nginx site if present
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Test the config
-sudo nginx -t
-
-# Reload nginx
-sudo systemctl reload nginx
-```
-
-Your app is now accessible on **port 80** at your domain.
+1. Browser `POST /api/storage/uploads/request-url` → `{ file_name, file_size, content_type }`
+2. Backend validates extension, MIME type, size; generates `objects/<uuid>` key;
+   returns a **5-minute presigned PUT URL** — R2 secrets never leave the server.
+3. Browser `PUT <presigned_url>` with file body directly to R2.
+4. Browser `POST /api/tasks/:id/attachments` → `{ file_name, file_url: objectKey, file_type, file_size, stored_filename: objectKey }`
+5. Backend saves only the object key (not a public URL) to PostgreSQL.
 
 ---
 
-## Step 6 — Enable HTTPS (Free SSL with Let's Encrypt)
+## Download flow (authenticated server-side streaming)
 
-```bash
-# Install Certbot
-sudo apt-get install -y certbot python3-certbot-nginx
+`GET /api/tasks/:taskId/attachments/:attachmentId/download`
 
-# Get a certificate (replace with your actual domain)
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+- **401** if not logged in.
+- **403** if the user cannot access the task.
+- **404** if the object key does not exist in R2.
+- Fetches the object from R2 server-side and streams it to the browser.
+- Headers set: `Content-Disposition: attachment`, `Cache-Control: no-store`.
 
-# Certbot will automatically update your nginx config for HTTPS
-# and set up auto-renewal
-```
-
----
-
-## Step 7 — Point Your Domain to the VPS
-
-In your domain registrar (or Hostinger DNS settings), add:
-
-| Type | Name | Value              |
-|------|------|--------------------|
-| A    | @    | YOUR_VPS_IP        |
-| A    | www  | YOUR_VPS_IP        |
-
-DNS changes can take up to 24 hours to propagate.
+**Incognito test:** open the download URL without logging in — you must receive
+`{"message":"Not authenticated"}` (401), not the file.
 
 ---
 
-## First Login
+## Delete behavior
 
-Once the app is live, log in with the default admin account:
+`DELETE /api/tasks/:taskId/attachments/:attachmentId`
 
-- **Email:** `admin@office.com`
-- **Password:** `admin123`
-
-**Important:** Change this password immediately after your first login via the profile settings page.
-
-You can also add these additional sample user accounts if you want test data:
-- `user@office.com` / `user123`
-- `alice@office.com` / `user123`
-- `bob@office.com` / `user123`
+- Requires login. Only admin or the original uploader may delete.
+- Deletes the PostgreSQL record **first** (data integrity guaranteed).
+- Attempts `DeleteObjectCommand` against R2 — failure is **logged but not fatal**.
+  The 204 response is still returned; the database is never left in a bad state.
 
 ---
 
-## File Uploads
+## Authorization model
 
-Uploaded files are stored in `/var/www/office-tasks/server/uploads/`.
+| Role | Access |
+|---|---|
+| Admin | All tasks and all attachments |
+| Task creator | Attachments on tasks they created |
+| Assigned user | Attachments on tasks assigned to them |
+| Other users | 403 Forbidden |
 
-To make them persist across deployments and keep your disk tidy, you may want to point this to a dedicated volume or regularly back it up:
-```bash
-# Backup uploads
-tar -czf uploads-backup-$(date +%Y%m%d).tar.gz /var/www/office-tasks/server/uploads/
-```
-
----
-
-## Useful Commands
-
-```bash
-# Restart the app
-pm2 restart office-tasks
-
-# Stop the app
-pm2 stop office-tasks
-
-# View logs
-pm2 logs office-tasks --lines 100
-
-# Monitor CPU/memory
-pm2 monit
-
-# Reload nginx after config changes
-sudo systemctl reload nginx
-
-# Check nginx logs
-sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/access.log
-```
+All checks are enforced server-side. Frontend button visibility is cosmetic only.
 
 ---
 
-## Updating the App
+## Seeded users (first boot only — skipped if users table is non-empty)
 
-When you have a new version of the built files:
+| Email | Password | Role |
+|---|---|---|
+| `admin@office.com` | `admin123` | admin |
+| `user@office.com` | `user123` | user |
+| `alice@office.com` | `user123` | user |
+| `bob@office.com` | `user123` | user |
 
-```bash
-# Upload new server/dist and server/public folders
-# Then restart the app
-pm2 restart office-tasks
-```
+**Change passwords immediately after first login in production.**
 
 ---
 
-## Troubleshooting
+## Docker internals
 
-**App won't start:**
-```bash
-pm2 logs office-tasks   # check for error messages
-# Common causes:
-# - DATABASE_URL is wrong (test with: psql "$DATABASE_URL")
-# - JWT_SECRET not set
-# - Port 3000 already in use: lsof -i :3000
-```
+- Builder: `node:20-bookworm-slim` (glibc for native binaries)
+- Runner: `node:20-alpine` (minimal final image)
+- `migrate.cjs` / `seed.cjs` are **CJS bundles** (not ESM) so `pg`'s dynamic
+  `require()` of Node built-ins (`events`, `stream`, etc.) works inside Alpine.
+- esbuild binary resolved from `artifacts/api-server/node_modules/.bin/esbuild`
+  (not root `node_modules`) — the root workspace does not install esbuild.
+- `UPLOAD_DIR=/app/uploads` — only used when `STORAGE_PROVIDER` is unset (local dev).
 
-**502 Bad Gateway from nginx:**
-```bash
-pm2 status   # make sure the app is running
-curl http://localhost:3000/api/health   # test the app directly
-```
+---
 
-**Database connection refused:**
-```bash
-sudo systemctl status postgresql   # check postgres is running
-psql -U office_user -d office_tasks -h localhost   # test connection
-```
+## Security checklist before go-live
+
+- [ ] R2 bucket public access is **disabled**
+- [ ] No public R2 URLs stored in the database
+- [ ] No long-lived presigned GET URLs generated
+- [ ] `JWT_SECRET` is a strong random 64-char value
+- [ ] Database port not exposed to the public internet
+- [ ] R2 API token scoped to `task-files-prod` only
+- [ ] Production domain added to R2 CORS `AllowedOrigins`

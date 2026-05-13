@@ -199,35 +199,77 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
     setIsUploadingFile(true);
     try {
       const token = localStorage.getItem("auth_token");
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", {
+
+      // Step 1: ask backend for a presigned PUT URL (or fallback mode for local dev)
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_size: file.size,
+          content_type: file.type,
+        }),
       });
 
-      if (!res.ok) {
-        const err = await res.json() as { message?: string };
-        throw new Error(err.message ?? "Upload failed");
+      if (!urlRes.ok) {
+        const err = await urlRes.json() as { message?: string };
+        throw new Error(err.message ?? "Could not get upload URL");
       }
 
-      const uploaded = await res.json() as {
-        file_name: string;
-        file_url: string;
-        file_type: string;
-        file_size: string;
+      const { mode, upload_url, object_key } = await urlRes.json() as {
+        mode: "s3" | "local";
+        upload_url: string | null;
+        object_key: string | null;
       };
 
+      let fileUrl: string;
+      let storedFilename: string;
+
+      if (mode === "s3" && upload_url && object_key) {
+        // Step 2 (S3): PUT file directly to R2 — no credentials in browser
+        const putRes = await fetch(upload_url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!putRes.ok) throw new Error("Upload to storage failed");
+        fileUrl = object_key;
+        storedFilename = object_key;
+      } else {
+        // Step 2 (local dev): multipart upload to the Express server
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token ?? ""}` },
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json() as { message?: string };
+          throw new Error(err.message ?? "Upload failed");
+        }
+        const uploaded = await uploadRes.json() as {
+          file_url: string;
+          stored_filename?: string;
+        };
+        fileUrl = uploaded.file_url;
+        storedFilename = uploaded.stored_filename ?? uploaded.file_url;
+      }
+
+      // Step 3: save attachment metadata in PostgreSQL
       attachmentMutation.mutate(
         {
           id: taskId,
           data: {
-            file_name: uploaded.file_name,
-            file_url: uploaded.file_url,
-            file_type: uploaded.file_type,
-            file_size: uploaded.file_size,
-          },
+            file_name: file.name,
+            file_url: fileUrl,
+            file_type: file.type,
+            file_size: `${(file.size / 1024).toFixed(1)} KB`,
+            stored_filename: storedFilename,
+          } as Parameters<typeof attachmentMutation.mutate>[0]["data"],
         },
         {
           onSuccess: () => {
@@ -235,7 +277,8 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
             queryClient.invalidateQueries({ queryKey: getGetTaskActivityQueryKey(taskId) });
             toast({ title: `"${file.name}" attached successfully` });
           },
-          onError: () => toast({ title: "Failed to save attachment record", variant: "destructive" }),
+          onError: () =>
+            toast({ title: "Failed to save attachment record", variant: "destructive" }),
         }
       );
     } catch (err) {
@@ -460,29 +503,41 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                                 toast({ title: "Download failed", variant: "destructive" });
                                 return;
                               }
-                              const contentType = res.headers.get("Content-Type") ?? "";
-                              if (contentType.includes("application/json")) {
-                                // S3/R2 mode: backend returns a presigned URL
-                                const { download_url } = await res.json() as { download_url: string };
-                                const a = document.createElement("a");
-                                a.href = download_url;
-                                a.target = "_blank";
-                                a.rel = "noopener noreferrer";
-                                a.click();
-                              } else {
-                                // Local disk mode: stream the file as a blob
-                                const blob = await res.blob();
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = att.file_name;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              }
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = att.file_name;
+                              a.click();
+                              URL.revokeObjectURL(url);
                             }}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
+                          {(isAdmin || currentUser?.email === att.uploaded_by_email) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                              data-testid={`btn-delete-attachment-${att.id}`}
+                              onClick={async () => {
+                                if (!confirm(`Delete "${att.file_name}"? This cannot be undone.`)) return;
+                                const token = localStorage.getItem("auth_token");
+                                const res = await fetch(
+                                  `/api/tasks/${taskId}/attachments/${att.id}`,
+                                  { method: "DELETE", headers: { Authorization: `Bearer ${token ?? ""}` } }
+                                );
+                                if (!res.ok) {
+                                  toast({ title: "Failed to delete attachment", variant: "destructive" });
+                                } else {
+                                  queryClient.invalidateQueries({ queryKey: getGetTaskAttachmentsQueryKey(taskId) });
+                                  toast({ title: `"${att.file_name}" deleted` });
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>

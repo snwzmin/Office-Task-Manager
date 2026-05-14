@@ -38,6 +38,7 @@ import {
   Clock,
   Copy,
   Download,
+  Eye,
   FolderOpen,
   MessageSquare,
   Paperclip,
@@ -492,6 +493,31 @@ export default function TaskDetail({ taskId }: { taskId: string }) {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 shrink-0"
+                            title="View"
+                            data-testid={`btn-view-${att.id}`}
+                            onClick={async () => {
+                              const token = localStorage.getItem("auth_token");
+                              const res = await fetch(
+                                `/api/tasks/${taskId}/attachments/${att.id}/download?inline=1`,
+                                { headers: { Authorization: `Bearer ${token ?? ""}` } }
+                              );
+                              if (!res.ok) {
+                                toast({ title: "Could not open file", variant: "destructive" });
+                                return;
+                              }
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              window.open(url, "_blank");
+                              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            title="Download"
                             data-testid={`btn-download-${att.id}`}
                             onClick={async () => {
                               const token = localStorage.getItem("auth_token");

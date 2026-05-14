@@ -234,10 +234,11 @@ router.get(
         const { stream, contentType, contentLength } =
           await streamFromS3(objectKey);
 
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${encodeURIComponent(attachment.file_name)}"`
-        );
+        const inline = req.query["inline"] === "1";
+        const disposition = inline
+          ? `inline; filename="${encodeURIComponent(attachment.file_name)}"`
+          : `attachment; filename="${encodeURIComponent(attachment.file_name)}"`;
+        res.setHeader("Content-Disposition", disposition);
         res.setHeader("Content-Type", attachment.file_type || contentType);
         res.setHeader("Cache-Control", "no-store");
         if (contentLength) res.setHeader("Content-Length", String(contentLength));
@@ -284,9 +285,10 @@ router.get(
         .json({ error: "NotFound", message: "File not found on disk" });
       return;
     }
+    const inlineLocal = req.query["inline"] === "1";
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(attachment.file_name)}"`
+      `${inlineLocal ? "inline" : "attachment"}; filename="${encodeURIComponent(attachment.file_name)}"`
     );
     res.setHeader("Content-Type", attachment.file_type);
     res.setHeader("Cache-Control", "no-store");
